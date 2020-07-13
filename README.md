@@ -1,8 +1,11 @@
 # pattern-analysis
 
-src/cluster.py 第348行def generate_dlc_report(save_dir, group_list, num_list, pv_df, total_outlier, clu_alg=cf.clu_alg, clu=cf.CLU+1, rule_num=cf.rule_num) 
+這是我用的瀏覽器版本  firefox/59.0.3
 
-src/dlc_template.html  最新版的模板
+src/cluster.py 第348行是我跑出html的function
+    def generate_dlc_report(save_dir, group_list, num_list, pv_df, total_outlier, clu_alg=cf.clu_alg, clu=cf.CLU+1, rule_num=cf.rule_num) 
+
+src/dlc_template.html  是我改的最新版的模板
 
 各個參數替代值
 save_dir = 'dlc_0712_p128' -->  算L1_num和L2_num和這個參數有關，所以354~360要註解掉 
