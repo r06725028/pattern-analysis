@@ -1,0 +1,190 @@
+<html>                                                                                                                                                                                                 
+<head>
+<style type="text/css">
+.section {
+  display: flex;
+  flex-direction: column;
+}
+img {
+  border-style: solid;
+  max-width: 50%;
+}
+img:hover {
+  cursor: pointer;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+th, td {
+  border: 1px solid black;
+}
+
+td {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+thead > tr {
+  background-color: black;
+  color: white;
+  width: 50%;
+}
+
+thead > tr > td {
+  width: 0%; 
+  border-color: white;
+}
+
+tbody:before {
+  content: "@";
+  display: block;
+  line-height: 1px;
+  text-indent: -99999px;
+}
+
+tbody > tr > td {
+  background-color: #E2E2E2;
+  border-width: 3px;
+  border-color: white;
+}
+
+.toggle {
+  font-size: 10px;
+  font-weight: 850;
+  color: blue;
+  -webkit-user-select: none; /* Chrome/Safari */
+  -moz-user-select: none; /* Firefox */
+  -ms-user-select: none; /* IE10+ */
+
+  /* Rules below not implemented in browsers yet */
+  -o-user-select: none;
+  user-select: none;
+}
+
+.toggle:hover {
+  color: #0000CC;
+  cursor: pointer;
+}
+
+.vanish {
+  display: none;
+}
+
+.cluster-block {
+  margin-left: 15px;
+  display: flex;
+  flex-direction: column;
+}
+
+.zoomIn {
+  width: 98%;
+}
+
+</style>                                                                                                                                                                                               
+</head>
+<body>
+DLC outlier report - #total clips= %total_clips%
+<hr/>
+
+<li>Analysis output path= %analysis_output_path% </li>
+<li>#outliers= %outlier_count%</li>
+<div>                                                                                                                                   
+  <li>Outlier PV rule name summary<span class="toggle" toggle-target-id="rulename_table">(toggle)</span></li>
+  <table id="rulename_table" class="vanish">
+    <thead>
+      <tr>
+        <td>PV rule name</td>
+        <td>#DRC</td>
+        <td>total_FR</td>
+        <td>%outliers</td>
+        <td>outlier FR</td>
+        <td>%inliers</td>
+        <td>inlier FR</td>
+        <td>previous most used recipe</td>
+        <td>rank</td>
+      </tr>
+    </thead>
+    <tbody>
+      %rulename_table%
+    </tbody>
+  </table>
+</div>
+<div>
+  <li>Outlier DB split summary (detail report: {output path}/caliber_report/{split name}.db)<span class="toggle" toggle-target-id="db_table">(toggle)</span></li>
+  <table id="db_table" class="vanish">
+    <thead>
+      <tr>
+        <td>Db split name</td>
+        <td>#outliers</td>
+      </tr>
+    </thead>
+    <tbody>
+      %outlier_db%
+    </tbody>
+  </table>
+</div>
+<div>
+  <li>Outlier DRC breakdown <span class="toggle" toggle-target-id="group_table">(toggle)</span></li>
+  <table id="group_table" class="vanish">
+    <thead>
+      <tr>
+        <td>Group name</td>
+        <td>#outliers</td>
+        <td>Avg outlier score</td>
+      </tr>
+    </thead>
+    <tbody>
+      %outlier_group%
+    </tbody>
+  </table>
+</div>
+<div class="section">
+  <li><span class>Outlier snapshots</span> <span class="toggle" toggle-target-id="outlier_img">(toggle)</span></li>                                                  
+  <img id="outlier_img" class="vanish" src="%outlier_img_path%">
+  <!-- <img id="outlier_img" class="vanish" src="%outlier_img_path%"> -->
+</div>
+<div>
+  <li>Detailed cluster breakdown</li>
+  %cluster_detailed_blocks%
+</div>
+<script>
+function toggleSwitch(e) {
+  var target_id = e.target.getAttribute("toggle-target-id");
+  var element = document.getElementById(target_id)
+  var swicth_class = "vanish";
+  existed_classes = element.className.split(" ");
+  if (existed_classes.indexOf(swicth_class) === -1) {
+    element.classList.add(swicth_class)
+  } else {
+    element.classList.remove(swicth_class);
+  }
+}
+
+for (var button of document.getElementsByClassName("toggle")) {
+  button.addEventListener("click", toggleSwitch, false);
+}
+
+function zoomInOut(e) {
+    var target_id = e.target.id;
+    var element = document.getElementById(target_id)
+    var swicth_class = "zoomIn";
+    existed_classes = element.className.split(" ");
+    if (existed_classes.indexOf(swicth_class) === -1) {     
+      element.classList.add(swicth_class)
+    } else {
+      element.classList.remove(swicth_class);
+    }
+}
+
+for (var button of document.getElementsByClassName("toggle")) {
+    button.addEventListener("click", toggleSwitch, false);
+}
+for (var img of document.getElementsByTagName("img")) {
+    img.addEventListener("click", zoomInOut, false);
+}
+
+</script>
+</body>
+</html>
