@@ -1,4 +1,4 @@
-<html>                                                                                                                                                                                                 
+<html>
 <head>
 <style type="text/css">
 .section {
@@ -7,7 +7,7 @@
 }
 img {
   border-style: solid;
-  max-width: 50%;
+  width: 50%;
 }
 img:hover {
   cursor: pointer;
@@ -33,7 +33,7 @@ thead > tr {
 }
 
 thead > tr > td {
-  width: 0%; 
+  width: 0%;
   border-color: white;
 }
 
@@ -79,17 +79,17 @@ tbody > tr > td {
 }
 
 .zoomIn {
-  width: 98%;
+  width: 90%;
 }
 
-</style>                                                                                                                                                                                               
+</style>
 </head>
 <body>
-DLC outlier report - #total clips= %total_clips%
+DLC outlier report - #total clips= 316(L1:47, L2:269)
 <hr/>
 
-<li>Analysis output path= %analysis_output_path% </li>
-<li>#outliers= %outlier_count%</li>
+<li>Analysis output path= /FSIM/SOIC_3DICTV_BE_20211231_1/users/uchuangn/run_DLC/dlc_0810_p128 </li>
+<li>#outliers= 24</li>
 <div>                                                                                                                                   
   <li>Outlier PV rule name summary<span class="toggle" toggle-target-id="rulename_table">(toggle)</span></li>
   <table id="rulename_table" class="vanish">
@@ -102,12 +102,12 @@ DLC outlier report - #total clips= %total_clips%
         <td>outlier FR</td>
         <td>%inliers</td>
         <td>inlier FR</td>
-        <td>previous most used recipe</td>
+        <td>prev most used recipe</td>
         <td>rank</td>
       </tr>
     </thead>
     <tbody>
-      %rulename_table%
+      <tr><td>MJ_M1.R.2</td><td>293</td><td>0.986</td><td>8.19</td><td>1.0</td><td>91.81</td><td>0.985</td><td>Customized(MJ_M1.R.2)</td><td>6.649</td></tr>
     </tbody>
   </table>
 </div>
@@ -121,7 +121,7 @@ DLC outlier report - #total clips= %total_clips%
       </tr>
     </thead>
     <tbody>
-      %outlier_db%
+      <tr><td>por_hnf</td><td>19</td></tr><tr><td>por_smxp_ewns_nil_hnf_tsmc_1_1</td><td>3</td></tr><tr><td>por_hni_Logic_ADB</td><td>1</td></tr><tr><td>por_smxp_0wn0_rni_rnfaesam</td><td>1</td></tr>
     </tbody>
   </table>
 </div>
@@ -136,18 +136,23 @@ DLC outlier report - #total clips= %total_clips%
       </tr>
     </thead>
     <tbody>
-      %outlier_group%
+      <tr><td>M/R/low</td><td>24</td><td>-0.052</td></tr>
     </tbody>
   </table>
 </div>
 <div class="section">
   <li><span class>Outlier snapshots</span> <span class="toggle" toggle-target-id="outlier_img">(toggle)</span></li>                                                  
-  <img id="outlier_img" class="vanish" src="%outlier_img_path%">
-  <!-- <img id="outlier_img" class="vanish" src="%outlier_img_path%"> -->
+  <img id="outlier_img" class="vanish" src="outlier_demo.png">
 </div>
 <div>
   <li>Detailed cluster breakdown</li>
-  %cluster_detailed_blocks%
+  <div class="cluster-block">
+         <section>
+          <span>- M/R/low</span>
+          <span class="toggle" toggle-target-id="MRlow">(toggle)</span></li>
+         </section>
+         <img id="MRlow" class="vanish" src="M/R/low/pie_spect_5_out.png">
+        </div>
 </div>
 <script>
 function toggleSwitch(e) {
