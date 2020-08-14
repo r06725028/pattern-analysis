@@ -2,11 +2,11 @@ from sklearn.cluster import KMeans, SpectralClustering
 from sklearn.metrics import silhouette_samples, silhouette_score
 from sklearn.ensemble import IsolationForest
 import numpy as np
-import pandas as pd                                                                                                                                                                                    
+import pandas as pd
 from sklearn.manifold import TSNE
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt 
 import math
-#plt.switch_backend('agg')
+plt.switch_backend('agg')
 import sys, re, os
 from random import sample
 
@@ -19,27 +19,41 @@ import webbrowser
 
 def extract_rcp_fr(address, if_convert=True):
     rule_name =  address.split('/')[-2]
-
-    if 'ori' in address:
+    
+    if 'env' in address:
+        checkrcpfr = re.compile('^[A-Z]+\d+_(.*)_fr1um_(.*)_frclu_(.*)_ori_(.+)_(.+)_(.+)_(.+)_remark_(.+)_env_(.+)_X.+')
+        rcp_fr = re.match(checkrcpfr, address.split('/')[-1])
+        [rcp, fr1um, frclu, llx, lly, urx, ury, remark, env] = [rcp_fr.group(i+1) for i in range(9)]
+    elif 'remark' in address:
+        checkrcpfr = re.compile('^[A-Z]+\d+_(.*)_fr1um_(.*)_frclu_(.*)_ori_(.+)_(.+)_(.+)_(.+)_remark_(.+)_X.+')
+        rcp_fr = re.match(checkrcpfr, address.split('/')[-1])
+        [rcp, fr1um, frclu, llx, lly, urx, ury, remark] = [rcp_fr.group(i+1) for i in range(8)]
+        env = ''
+    elif 'ori' in address:
         checkrcpfr = re.compile('^[A-Z]+\d+_(.*)_fr1um_(.*)_frclu_(.*)_ori_(.+)_(.+)_(.+)_(.+)_X.+')
         rcp_fr = re.match(checkrcpfr, address.split('/')[-1])
         [rcp, fr1um, frclu, llx, lly, urx, ury] = [rcp_fr.group(i+1) for i in range(7)]
+        remark, env = '', ''
     else:
         checkrcpfr = re.compile('^[A-Z]+\d+_(.*)_fr1um_(.*)_frclu_(.*)_X.+')
         rcp_fr = re.match(checkrcpfr, address.split('/')[-1])
         [rcp, fr1um, frclu] = [rcp_fr.group(i+1) for i in range(3)]
         llx = lly = urx = ury = '0'
+        remark, env = '', ''
 
     rcp = rcp if rcp != '' else 'none'
     fr1um = fr1um if fr1um not in ['None', ''] else 0.0
     frclu = frclu if frclu not in ['None', ''] else 0.0
-
+           
     if if_convert:
         rcp = convert_rcp(rcp, fr1um)
+    
+    if rcp not in cf.label_list:
+        print('new recipe !!!', rcp)
+        print(address)
+    return [rcp, float(fr1um), float(frclu), rule_name, float(llx), float(lly), float(urx), float(ury), remark, env]
 
-    return rcp, float(fr1um), float(frclu), rule_name, float(llx), float(lly), float(urx), float(ury)
-
-def convert_rcp(rcp, fr1um):
+def convert_rc(ct_rcp_frrcp, fr1um):
     if rcp == 'none':
         if float(fr1um) >= cf.hfr:
             rcp = 'EDA'
@@ -52,7 +66,7 @@ def read_feature(save_dir, tp, stp, lyr):
     ftofea = {address:feature for address, feature in zip(f, fea)}
 
     return ftofea, fea, f
-    
+
 def out2table(all_outlier, pvtorcp_dict, pvtofr_dict):
     db_split_dict = {}
     num_dict = {}
@@ -62,7 +76,7 @@ def out2table(all_outlier, pvtorcp_dict, pvtofr_dict):
     
     for f in all_outlier:
         split = f.split('/')[-4]
-        _,fr,_, rule,_,_,_,_ = extract_rcp_fr(f, True)
+        [fr, _, rule] = extract_rcp_fr(f, True)[1:4]
         
         if rule in pv_outfr_dict:
             pv_outfr_dict[rule].append(fr)
@@ -76,6 +90,12 @@ def out2table(all_outlier, pvtorcp_dict, pvtofr_dict):
         
     for split in db_split_dict:
         num_dict[split] = len(db_split_dict[split])
+
+    frs = []
+    for rule in ids:
+        frs += pvtofr_dict[rule]
+    shuttle_fr = np.mean(frs)
+    fr_th = shuttle_fr + abs(shuttle_fr)*0.1
     
     rows = []
     for rule in ids:
@@ -96,12 +116,16 @@ def out2table(all_outlier, pvtorcp_dict, pvtofr_dict):
         
         in_pent = round(100 - out_pent, 2)
 
+        sugg_rcp = ''
         if rule in pvtorcp_dict:
-            sugg_rcp = max(pvtorcp_dict[rule], key=pvtorcp_dict[rule].count)
-            if sugg_rcp == 'none':
-                sugg_rcp = ''
-        else:
-            sugg_rcp = ''
+            rcp_cand = []
+            for rcp, fr in pvtorcp_dict[rule]:
+                if ((fr >= fr_th) or (fr >= cf.hfr)):
+                    rcp_cand.append(rcp)
+            if len(rcp_cand) > 0:
+                sugg_rcp = max(rcp_cand, key=rcp_cand.count)
+                if 'none' in sugg_rcp:
+                    sugg_rcp = ''
 
         rank = round(math.log(drc_num)*((1-out_fr)*out_pent+0.85*(1-in_fr)*in_pent), 3)
         rows.append([drc_num, tot_fr, out_pent, out_fr, in_pent, in_fr, sugg_rcp, rank])
@@ -110,8 +134,9 @@ def out2table(all_outlier, pvtorcp_dict, pvtofr_dict):
     df.sort_values(by=['rank'], ascending=[False], inplace=True)
 
     return sorted(num_dict.items(), key=lambda d: d[1], reverse=True), db_split_dict, df
-    
- def generate_sub_fig(rcp_dict, title, fr_dict):
+
+
+def generate_sub_fig(rcp_dict, title, fr_dict):
     keys = list(rcp_dict.keys())
     size = []
     for k in keys:
@@ -139,7 +164,7 @@ def out2table(all_outlier, pvtorcp_dict, pvtofr_dict):
 
     plt.axis('equal')
 
-def plot_pie_chart(group_dir, clu_alg, clu, tp, stp, lyr, score, recipe, rule_name, totclu, totdrc, fr_rcp, fr_rule, demo):                                                                            
+def plot_pie_chart(group_dir, clu_alg, clu, tp, stp, lyr, score, recipe, rule_name, totclu, totdrc, fr_rcp, fr_rule, demo):
     pie_path = os.path.join(group_dir, cf.pie_name.format(clu_alg, clu))
     
     fig = plt.figure(figsize=(16,1.8+clu*1.5), dpi=80)                                                                   
@@ -191,7 +216,7 @@ def plot_outlier_demo(save_dir, all_outlier, total_outlier, NUM=(cf.demo_num+2),
             idx = i*NUM+j
             if len(demo) > idx:
                 ax = plt.subplot2grid((row, NUM),(i,j))
-                _, _, _, rule_name, _, _, _ , _ = extract_rcp_fr(demo[idx])
+                rule_name = extract_rcp_fr(demo[idx])[3]
                 plt.title(rule_name, fontsize=9, pad=3)
                 lout = plt.imread(demo[idx])
                 ax.axis('off')
@@ -243,6 +268,7 @@ def generate_res(group_dir, clu_alg, clu, encoder_feature, fname, out_fea, out_f
     
     return labels, clu
 
+
 def outlier_detection(encoder_feature):
     if len(encoder_feature) > 0:
         iso = IsolationForest(n_estimators=100, bootstrap="new", contamination='auto', behaviour='new', random_state=42, n_jobs=-1)
@@ -253,18 +279,18 @@ def outlier_detection(encoder_feature):
             score = round(np.mean(iso.decision_function(np.array(encoder_feature)[np.array(labels)==-1])), 4)
             pent = n_noise/len(labels)
         else:
-            score = 0.0 
-            pent = 0.0 
+            score = 0.0
+            pent = 0.0
     else:
         labels = []
-        score = 0.0 
-        n_noise = 0 
-        pent = 0.0 
+        score = 0.0
+        n_noise = 0
+        pent = 0.0
 
     print('# of noise = ', n_noise)
-    print('tot drc = ', len(labels))
+    print('# 0f L1 drc = ', len(labels))
     print('% of noise = ', pent)
-        
+    
     return labels, n_noise, score
 
 def process_res(group_dir, CLU, NUM, clu_alg):
@@ -283,7 +309,7 @@ def process_res(group_dir, CLU, NUM, clu_alg):
         fr_rule_dict = {}
 
         for lab in cf.label_list:
-            rcp_dict[lab] = 0 
+            rcp_dict[lab] = 0
             fr_rcp_dict[lab] = []
 
         recipe.append(rcp_dict)
@@ -303,7 +329,7 @@ def process_res(group_dir, CLU, NUM, clu_alg):
         # M4_none_fr1um_1.0_frclu_None_X_833.476_834.476_Y_818.552_819.552_VIA4.png', 'M4_none_fr1um_1.0_frclu_None_X_833.476_834.476_Y_818.552_819.552_M5.png
         for line in content:
             [no, address] = line.strip().split(' : ')
-            rcp, fr1um, frclum, rule, _, _, _ , _ = extract_rcp_fr(address, True)
+            [rcp, fr1um, frclum, rule] = extract_rcp_fr(address, True)[:4]
             demo[int(no)].append(address)
             
 
@@ -330,7 +356,7 @@ def process_res(group_dir, CLU, NUM, clu_alg):
 
     return score, recipe, rule_name, demo, totdrc, fr_rcp, fr_rule, totclu
 
-def try_k(group_dir, clu_alg, encoder_feature):                                                                                                                                                        
+def try_k(group_dir, clu_alg, encoder_feature):
     try_path = os.path.join(group_dir, cf.try_name.format(clu_alg))
 
     # try to find best num of cluster
@@ -408,7 +434,8 @@ def generate_dlc_report(save_dir, group_list, num_list, pv_df, total_outlier, cl
     
     filename = 'file:///' + file_path
     #webbrowser.open_new_tab(filename)
-    
+
+
 def generate_calibre_db(save_dir, db_split_dict, mutli=cf.mutli):
     if not os.path.exists(os.path.join(save_dir, cf.db_report_dir)):
         os.mkdir(os.path.join(save_dir, cf.db_report_dir))
@@ -417,7 +444,7 @@ def generate_calibre_db(save_dir, db_split_dict, mutli=cf.mutli):
         with open(os.path.join(save_dir, cf.db_report_dir, '{}.db'.format(split)), 'w') as f:
             f.write(split+' '+str(cf.mutli)+'\n')
             for i, address in enumerate(db_split_dict[split]):
-                _,_,_, rule, x1, y1, x2, y2 = extract_rcp_fr(address)
+                [rule, x1, y1, x2, y2] = extract_rcp_fr(address)[3:8]
                 f.write(rule+'/'+str(i)+'\n')
                 f.write('1 1 3 July 2 16:16:38 2020\n')
                 f.write(rule+'/'+str(i)+'\n')
@@ -440,7 +467,7 @@ def generate_cbca_report(save_dir, case_list, group_list, num_list, pv_df, total
     L1_num, L2_num = 0, 0
     all_f = np.load(os.path.join(save_dir, cf.f_name))
     for address in all_f:
-        rcp,_,_,_,_,_,_,_ = extract_rcp_fr(address, False)
+        rcp = extract_rcp_fr(address, False)[0]
         if rcp == 'none':
             L1_num += 1
         else:
@@ -452,12 +479,6 @@ def generate_cbca_report(save_dir, case_list, group_list, num_list, pv_df, total
     buffer_html = buffer_html.replace("%analysis_output_path%", outpath)
     buffer_html = buffer_html.replace("%outlier_count%", str(total_outlier))
     buffer_html = buffer_html.replace("%outlier_img_path%", outlier_path)
-
-    outlier_rows_html = ""
-    outlier_db_html = ""
-    outlier_group_html = ""
-    pv_df_html = ""
-    detailed_blocks_html = ""
 
     outlier_rows_html = ""
     outlier_db_html = ""
@@ -505,7 +526,7 @@ def generate_cbca_report(save_dir, case_list, group_list, num_list, pv_df, total
     
     filename = 'file:///' + file_path
     #webbrowser.open_new_tab(filename)
-    
+
 def cluster_group(save_dir, usage='dlc'):
     outlier_dict = {}
     pvtorcp_dict = {}
@@ -513,72 +534,71 @@ def cluster_group(save_dir, usage='dlc'):
     all_outlier = []
     
     for tp in cf.type_list:
-        for lyr in cf.layer_list:
-            for stp in cf.subtype_list: 
+        for dirpath, dirnames, filenames in os.walk(os.path.join(save_dir, tp)):
+            if len(dirpath.split('/')) == 4:
+                [stp, lyr] = dirpath.split('/')[-2:]
                 group_dir = os.path.join(save_dir, tp, stp, lyr)
-                if os.path.exists(group_dir):
-                    ftofea, encoder_feature, fname = read_feature(save_dir, tp, stp, lyr) 
+                ftofea, encoder_feature, fname = read_feature(save_dir, tp, stp, lyr) 
 
-                    print('----------', tp, stp, lyr, 'feature:', encoder_feature.shape )
-                    no_recipe_feature, no_recipe_f = [], []
-                    recipe_feature, recipe_f = [], []
-                    for f, fea in ftofea.items():
-                        rcp, fr,_, rule_name,_,_,_,_ = extract_rcp_fr(f, True)
-                        if rcp in cf.label_list:
-                            if 'ADFL1' in f:
-                                no_recipe_feature.append(fea)
-                                no_recipe_f.append(f)
-                            else:
-                                recipe_feature.append(fea)
-                                recipe_f.append(f)
-                        
-                            if rule_name not in pvtofr_dict:
-                                pvtofr_dict[rule_name] = [fr]
-                            else:
-                                pvtofr_dict[rule_name].append(fr)
-                            
-                    labels_noise, n_noise, score = outlier_detection(no_recipe_feature)                    
-                    #plot_tsne(group_dir, cf.clu_alg, cf.CLU+1, no_recipe_feature, labels_noise)
-                    outlier_dict['/'.join([tp, stp, lyr])] = (n_noise, score)
-
-                    if n_noise > 0:
-                        if len(recipe_feature) > 0:
-                            inlier_fea = np.concatenate((np.array(recipe_feature), np.array(no_recipe_feature)[labels_noise == 1]), axis=0) 
-                            inlier_f = np.concatenate((np.array(recipe_f), np.array(no_recipe_f)[labels_noise == 1]), axis=0)
-                            outlier_fea = np.array(no_recipe_feature)[labels_noise == -1]
-                            outlier_f = np.array(no_recipe_f)[labels_noise == -1]
+                print('----------', tp, stp, lyr, 'feature:', encoder_feature.shape )
+                no_recipe_feature, no_recipe_f = [], []
+                recipe_feature, recipe_f = [], []
+                for f, fea in ftofea.items():
+                    [rcp, fr, _, rule_name] = extract_rcp_fr(f, True)[:4]
+                    if rcp in cf.label_list:
+                        if 'ADFL1' in f:
+                            no_recipe_feature.append(fea)
+                            no_recipe_f.append(f)
                         else:
-                            inlier_fea = np.array(no_recipe_feature)[labels_noise == 1] 
-                            inlier_f = np.array(no_recipe_f)[labels_noise == 1]
-                            outlier_fea = np.array(no_recipe_feature)[labels_noise == -1] 
-                            outlier_f = np.array(no_recipe_f)[labels_noise == -1]
-                        all_outlier += list(outlier_f)
-                    else:
-                        inlier_fea = np.array(recipe_feature)
-                        inlier_f = np.array(recipe_f)
-                        outlier_fea = [] 
-                        outlier_f = []
+                            recipe_feature.append(fea)
+                            recipe_f.append(f)
                     
-                    for f in inlier_f:
-                        rcp, fr,_,rule,_,_,_,_ = extract_rcp_fr(f,True)
-                        if fr > cf.hfr:
-                            if rule not in pvtorcp_dict:
-                                pvtorcp_dict[rule] = [rcp]
-                            else:
-                                pvtorcp_dict[rule].append(rcp)
+                        if rule_name not in pvtofr_dict:
+                            pvtofr_dict[rule_name] = [fr]
+                        else:
+                            pvtofr_dict[rule_name].append(fr)
+                        
+                labels_noise, n_noise, score = outlier_detection(no_recipe_feature)                    
+                #plot_tsne(group_dir, cf.clu_alg, cf.CLU+1, no_recipe_feature, labels_noise)
+                outlier_dict['/'.join([tp, stp, lyr])] = (n_noise, score)
 
-                    for clu_alg in cf.cluster_list:
-                        for clu in cf.clu_range:
-                            print('clustering...')
-                            labels, clu = generate_res(group_dir, clu_alg, clu, inlier_fea, inlier_f, outlier_fea, outlier_f)
-                            
-                            #print('generate TSNE scatter...')
-                            #plot_tsne(group_dir, clu_alg, clu, encoder_feature, labels)
+                if n_noise > 0:
+                    if len(recipe_feature) > 0:
+                        inlier_fea = np.concatenate((np.array(recipe_feature), np.array(no_recipe_feature)[labels_noise == 1]), axis=0) 
+                        inlier_f = np.concatenate((np.array(recipe_f), np.array(no_recipe_f)[labels_noise == 1]), axis=0)
+                        outlier_fea = np.array(no_recipe_feature)[labels_noise == -1]
+                        outlier_f = np.array(no_recipe_f)[labels_noise == -1]
+                    else:
+                        inlier_fea = np.array(no_recipe_feature)[labels_noise == 1] 
+                        inlier_f = np.array(no_recipe_f)[labels_noise == 1]
+                        outlier_fea = np.array(no_recipe_feature)[labels_noise == -1] 
+                        outlier_f = np.array(no_recipe_f)[labels_noise == -1]
+                    all_outlier += list(outlier_f)
+                else:
+                    inlier_fea = np.array(recipe_feature)
+                    inlier_f = np.array(recipe_f)
+                    outlier_fea = [] 
+                    outlier_f = []
+                
+                for f in inlier_f:
+                    [rcp, fr, rule, remark] = [extract_rcp_fr(f,True)[i] for i in [0, 1, 3, 8]]
+                    if rule not in pvtorcp_dict:
+                        pvtorcp_dict[rule] = [('{}({})'.format(rcp, remark), fr)]
+                    else:
+                        pvtorcp_dict[rule].append(('{}({})'.format(rcp, remark), fr))
 
-                            print('generate pie chart...')
-                            score, recipe, rule_name, demo, totdrc, fr_rcp, fr_rule, totclu = process_res(group_dir, clu, cf.demo_num, clu_alg)
-                            plot_pie_chart(group_dir, clu_alg, clu, tp, stp, lyr, score, recipe, rule_name, totclu, totdrc, fr_rcp, fr_rule, demo)
-                            
+                for clu_alg in cf.cluster_list:
+                    for clu in cf.clu_range:
+                        print('clustering...')
+                        labels, clu = generate_res(group_dir, clu_alg, clu, inlier_fea, inlier_f, outlier_fea, outlier_f)
+                        
+                        #print('generate TSNE scatter...')
+                        #plot_tsne(group_dir, clu_alg, clu, encoder_feature, labels)
+
+                        print('generate pie chart...')
+                        score, recipe, rule_name, demo, totdrc, fr_rcp, fr_rule, totclu = process_res(group_dir, clu, cf.demo_num, clu_alg)
+                        plot_pie_chart(group_dir, clu_alg, clu, tp, stp, lyr, score, recipe, rule_name, totclu, totdrc, fr_rcp, fr_rule, demo)
+                        
     total_outlier = len(all_outlier)
     plot_outlier_demo(save_dir, all_outlier, total_outlier)
     num_list, db_split_dict, pv_df = out2table(all_outlier, pvtorcp_dict, pvtofr_dict)
@@ -610,7 +630,7 @@ def cluster_group_cbca(save_dir, all_outlier, all_outfea, iso, usage='cbca'):
                         outlier_fea = np.array(list(allout_dict[group_name].values())).reshape(n_noise,-1)
                         outlier_f = list(allout_dict[group_name].keys())
                         score = round(np.mean(iso.decision_function(outlier_fea)), 4)
-                    else:                        
+                    else:
                         n_noise = 0
                         outlier_fea = outlier_f = []
                         score = 0.0
@@ -636,7 +656,7 @@ def cluster_group_cbca(save_dir, all_outlier, all_outfea, iso, usage='cbca'):
 
     return sorted(outlier_dict.items(), key=lambda d: d[1], reverse=True)
 
-def train_isotree(use_dlc='0505', old_cbca=['0525', '0526']):
+def train_isotree(use_dlc='0802', old_cbca=[]):
     save_dir = 'dlc_{}_p{}'.format(use_dlc, cf.DIM)
     x, all_f = [], []
     pvtorcp_dict = {}
@@ -665,15 +685,15 @@ def train_isotree(use_dlc='0505', old_cbca=['0525', '0526']):
         #all_f += list(inf)
     
     for f in all_f:
-        rcp,_,_,rule,_,_,_,_ = extract_rcp_fr(f, True)
+        [rcp, fr, rule, remark] = [extract_rcp_fr(f, True)[i] for i in [0, 1, 3, 8]]
         if rule not in pvtorcp_dict:
-            pvtorcp_dict[rule] = [rcp]
+            pvtorcp_dict[rule] = [('{}({})'.format(rcp, remark), fr)]
         else:
-            pvtorcp_dict[rule].append(rcp)
+            pvtorcp_dict[rule].append(('{}({})'.format(rcp, remark), fr))
         
     x = np.array(x).reshape(len(x), -1)    
     print('train isolationforest ... (shape:{})'.format(x.shape))
-    iso = IsolationForest(n_estimators=100, behaviour='new', bootstrap=True, contamination='auto', random_state=42, n_jobs=-1).fit(x)
+    iso = IsolationForest(n_estimators=100, bootstrap=True, contamination='auto', behaviour='new', random_state=42, n_jobs=-1).fit(x)
     
     return iso, pvtorcp_dict
 
@@ -685,10 +705,15 @@ def test_cacb(save_dir, iso, pvtorcp_dict):
     case_dict = {}    
     for fea, f in zip(test_data, test_f):
         case = f.split('/')[-3]
-        rcp, fr, _, rule_name, _, _, _ , _ = extract_rcp_fr(f, False)
+        [rcp, fr, _, rule_name] = extract_rcp_fr(f, False)[:4]
         if rcp not in ['CongestionFix', 'NoFix', '']:
             if rule_name not in pvtofr_dict:
                 pvtofr_dict[rule_name] = [fr]
+            else:
+                pvtofr_dict[rule_name].append(fr)
+
+            if case not in case_dict:
+                case_dict[case] = {f:fea}
             else:
                 case_dict[case][f] = fea
     
@@ -703,7 +728,7 @@ def test_cacb(save_dir, iso, pvtorcp_dict):
         recipe_feature, recipe_f = [], []
 
         for fea, f in zip(case_fea, case_f):
-            rcp ,_,_,_,_,_,_,_ = extract_rcp_fr(f, False)
+            rcp = extract_rcp_fr(f, False)[0]
             if rcp == 'none':
                 no_recipe_feature.append(fea)
                 no_recipe_f.append(f)
@@ -738,7 +763,7 @@ def test_cacb(save_dir, iso, pvtorcp_dict):
     np.save(os.path.join(save_dir, cf.infea_name), np.array(in_fea))
     np.save(os.path.join(save_dir, cf.inf_name), np.array(in_f))
     print('in_fea', np.array(in_fea).shape)
-    
+
     num_list, db_split_dict, pv_df = out2table(all_outlier, pvtorcp_dict, pvtofr_dict)
     total_outlier = len(all_outlier)
     plot_outlier_demo(save_dir, all_outlier, total_outlier)
@@ -753,3 +778,4 @@ def test_cacb(save_dir, iso, pvtorcp_dict):
 #iso = train_isotree()
 #case_dict = test_cacb('cbca_0619_p128', iso)
 #geneirate_cbca_report('cbca_0619_p128', case_dict)
+
